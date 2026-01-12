@@ -3,6 +3,70 @@
 # About This Project
 This repository provides a detailed, step-by-step implementation guide for facial age estimation using PyTorch, a popular deep learning framework. The goal of this project is to accurately estimate the age of individuals based on their facial appearance.
 
+## Environment setup (Windows/macOS/Linux)
+
+This project targets **Python 3.10**. Newer versions (for example Python 3.13) will fail because some pinned dependencies in `Requirements.txt` do not ship wheels for 3.13.
+
+Check your version:
+
+```bash
+python -V
+```
+
+If you are not on Python 3.10, create a 3.10 environment before installing. Examples:
+
+**Windows (pyenv-win)**
+
+```powershell
+pyenv install 3.10.12
+pyenv local 3.10.12
+python -V
+```
+
+**Windows/macOS/Linux (conda)**
+
+```bash
+conda create -n age-estimation python=3.10
+conda activate age-estimation
+python -V
+```
+
+**macOS/Linux (pyenv)**
+
+```bash
+pyenv install 3.10.12
+pyenv local 3.10.12
+python -V
+```
+
+**Windows (venv with Python Launcher)**
+
+```powershell
+py -3.10 -m venv venv
+.\venv\Scripts\activate
+python -V
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -r Requirements.txt
+```
+
+If you see errors like `BackendUnavailable: Cannot import 'setuptools.build_meta'`, install the build tools first:
+
+```bash
+python -m pip install --upgrade pip setuptools wheel
+```
+
+Then install dependencies:
+
+```bash
+pip install -r Requirements.txt
+```
+
+> **Windows note:** multi-line commands use PowerShell backticks (`` ` ``) or run the export on one line. For example:
+>
+> ```powershell
+> python export_onnx.py --checkpoint checkpoints/epoch-16-loss_valid-4.73.pt --model-name resnet --output artifacts/age_estimator.onnx
+> ```
+
 # Step 1: Accurate and concise definition of the problem
 Age estimation refers to the process of estimating a person's age based on various observable characteristics or features. It is often performed using computer vision techniques that analyze facial attributes such as wrinkles, skin texture, and hair color. By comparing these characteristics with a database of known age examples, algorithms can make an educated guess about a person's age. **However, it is important to note that age estimation is not always accurate and can be affected by factors such as lighting conditions, facial expressions, race, genetics, and individual variations such as makeup**. It is primarily used in applications like biometrics, demographic analysis, or age-restricted access control systems.
 
@@ -527,6 +591,21 @@ python export_onnx.py \
 
 This will generate `artifacts/age_estimator.onnx`.
 
+### 1.1 Export to Core ML (.mlmodel) for iOS
+
+Core ML is the native format for iOS. You can export a `.mlmodel` directly from the PyTorch checkpoint:
+
+```bash
+python export_coreml.py \
+  --checkpoint checkpoints/epoch-16-loss_valid-4.73.pt \
+  --model-name resnet \
+  --output artifacts/age_estimator.mlmodel
+```
+
+This creates `artifacts/age_estimator.mlmodel`. You can deliver this file to iOS devs, who can compile it into `.mlmodelc` in Xcode.
+
+> **Note:** Core ML export requires `coremltools` and runs on macOS.
+
 ### 2. Mobile preprocessing requirements (must match training)
 
 The model expects:
@@ -561,6 +640,71 @@ Preprocessing steps:
 **Model file**
 - [ ] Provide `age_estimator.onnx` to mobile devs.
 
+### 3.1 Mobile usage (what to do with the ONNX file)
+
+Below are minimal dependency and usage steps for Android (Kotlin) and iOS (Swift) once you have `age_estimator.onnx`.
+
+#### Android (ONNX Runtime Mobile)
+
+**Dependencies**
+
+Add ONNX Runtime Mobile to your `build.gradle`:
+
+```gradle
+dependencies {
+    implementation "com.microsoft.onnxruntime:onnxruntime-mobile:1.17.0"
+}
+```
+
+**Load model**
+
+```kotlin
+val env = OrtEnvironment.getEnvironment()
+val session = env.createSession(modelBytes)
+```
+
+`modelBytes` is the `.onnx` file loaded from assets or file storage.
+
+**Run inference**
+
+```kotlin
+val inputName = session.inputNames.iterator().next()
+val inputBuffer = preprocessToNchwFloatBuffer(faceBitmap)
+val shape = longArrayOf(1, 3, 128, 128)
+val inputTensor = OnnxTensor.createTensor(env, inputBuffer, shape)
+val outputs = session.run(mapOf(inputName to inputTensor))
+val age = (outputs[0].value as Array<FloatArray>)[0][0]
+```
+
+#### iOS (ONNX Runtime)
+
+**Dependencies**
+
+Add ONNX Runtime via Swift Package Manager:
+
+- URL: `https://github.com/microsoft/onnxruntime`
+
+**Load model**
+
+```swift
+let env = try ORTEnv(loggingLevel: ORTLoggingLevel.warning)
+let session = try ORTSession(env: env, modelPath: modelPath, sessionOptions: nil)
+```
+
+**Run inference**
+
+```swift
+let inputName = try session.inputNames().first!
+let inputData = preprocessToNchwFloatBuffer(image: faceImage)!
+let inputTensor = try ORTValue(tensorData: Data(buffer: UnsafeBufferPointer(start: inputData, count: inputData.count)),
+                               elementType: ORTTensorElementDataType.float,
+                               shape: [1, 3, 128, 128])
+let output = try session.run(withInputs: [inputName: inputTensor], outputNames: nil, runOptions: nil)
+let age = (output.values.first as? ORTValue)?.tensorData().withUnsafeBytes { ptr -> Float in
+    return ptr.bindMemory(to: Float.self)[0]
+}
+```
+
 **Input pipeline**
 - [ ] Capture a face image (or crop a detected face region).
 - [ ] Resize to 128×128 RGB.
@@ -575,6 +719,30 @@ Preprocessing steps:
 **Validation**
 - [ ] Run a known test image in Python and mobile, compare outputs.
   - If there is a mismatch, confirm normalization, image layout, and resize method.
+
+## Quick ONNX test with a single image (no code knowledge required)
+
+If you only have **one image** in a folder and want to sanity-check the ONNX model, follow these steps:
+
+1. Put your ONNX file and image in a folder (example):
+
+```
+age_test/
+  age_estimator.onnx
+  photo.jpg
+```
+
+2. Open a terminal in that folder and run:
+
+```bash
+python test_onnx_image.py --model age_estimator.onnx --image photo.jpg
+```
+
+You should see:
+
+```
+Predicted age: 34.27
+```
 
 #### Experiments
 
