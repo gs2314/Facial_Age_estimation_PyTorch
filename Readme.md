@@ -510,6 +510,72 @@ The function will process the image, estimate the age, and save the output image
 - [✔️] Implement code for performing inference using the trained model.
 - [✔️] Provide instructions on how to use the inference code with sample input data.
 
+## Export to ONNX for mobile
+
+This repository uses regression (a single floating-point output) to estimate age. The mobile app should display this value, optionally rounded to an integer.
+
+### 1. Export a trained checkpoint to ONNX
+
+If you have a trained checkpoint (for example, `checkpoints/epoch-16-loss_valid-4.73.pt`), export it with:
+
+```bash
+python export_onnx.py \
+  --checkpoint checkpoints/epoch-16-loss_valid-4.73.pt \
+  --model-name resnet \
+  --output artifacts/age_estimator.onnx
+```
+
+This will generate `artifacts/age_estimator.onnx`.
+
+### 2. Mobile preprocessing requirements (must match training)
+
+The model expects:
+
+- **Input size**: 128×128
+- **Color space**: RGB
+- **Layout**: NCHW (batch, channels, height, width)
+- **Data type**: float32
+- **Normalization** (ImageNet):
+  - mean = [0.485, 0.456, 0.406]
+  - std = [0.229, 0.224, 0.225]
+
+### 2.1 Face cropping guidance
+
+The model was trained on UTKFace cropped faces. You **do not** need an exact forehead-to-jaw box, but you should crop a full face region with minimal background.
+
+- Prefer a standard face detector and use its bounding box.
+- Include the full face (forehead to chin) when possible.
+- Avoid large margins (hair, background, shoulders) because it can reduce accuracy.
+- If you can only crop loosely, center the face and ensure both eyes, nose, and mouth are visible.
+
+Preprocessing steps:
+
+1. Load/capture face image.
+2. Resize to 128×128.
+3. Convert to RGB float32 in range [0, 1].
+4. Normalize each channel: `(x - mean) / std`.
+5. Feed as shape `[1, 3, 128, 128]`.
+
+### 3. Mobile integration checklist (ONNX Runtime)
+
+**Model file**
+- [ ] Provide `age_estimator.onnx` to mobile devs.
+
+**Input pipeline**
+- [ ] Capture a face image (or crop a detected face region).
+- [ ] Resize to 128×128 RGB.
+- [ ] Normalize with ImageNet mean/std.
+- [ ] Arrange as NCHW float32 tensor: `[1, 3, 128, 128]`.
+
+**Output handling**
+- [ ] Read output tensor of shape `[1, 1]`.
+- [ ] Interpret the value as **predicted age** (float).
+- [ ] Display rounded age or show one decimal place.
+
+**Validation**
+- [ ] Run a known test image in Python and mobile, compare outputs.
+  - If there is a mismatch, confirm normalization, image layout, and resize method.
+
 #### Experiments
 
 ##### Train and Evaluate the Model Using Various Datasets
