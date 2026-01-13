@@ -8,6 +8,26 @@ from config import config
 from model import AgeEstimationModel
 
 
+class Normalize(torch.nn.Module):
+    def __init__(self, mean, std):
+        super().__init__()
+        self.register_buffer("mean", torch.tensor(mean).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.tensor(std).view(1, 3, 1, 1))
+
+    def forward(self, x):
+        return (x - self.mean) / self.std
+
+
+class ModelWithNormalize(torch.nn.Module):
+    def __init__(self, model, mean, std):
+        super().__init__()
+        self.normalize = Normalize(mean, std)
+        self.model = model
+
+    def forward(self, x):
+        return self.model(self.normalize(x))
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Export age estimation model to Core ML.")
     parser.add_argument(
@@ -26,10 +46,15 @@ def parse_args():
         default="age_estimator.mlmodel",
         help="Destination .mlmodel file path.",
     )
+    parser.add_argument(
+        "--image-input",
+        action="store_true",
+        help="Export with Core ML image input and embed normalization.",
+    )
     return parser.parse_args()
 
 
-def export_coreml(checkpoint_path, model_name, output_path):
+def export_coreml(checkpoint_path, model_name, output_path, image_input):
     model = AgeEstimationModel(
         input_dim=3,
         output_nodes=1,
@@ -47,16 +72,29 @@ def export_coreml(checkpoint_path, model_name, output_path):
         config["img_width"],
         dtype=torch.float32,
     )
-    traced = torch.jit.trace(model, dummy_input)
-
-    mlmodel = ct.convert(
-        traced,
-        inputs=[
+    if image_input:
+        wrapped = ModelWithNormalize(model, config["mean"], config["std"])
+        traced = torch.jit.trace(wrapped, dummy_input)
+        inputs = [
+            ct.ImageType(
+                name="input",
+                shape=dummy_input.shape,
+                scale=1 / 255.0,
+                color_layout=ct.colorlayout.RGB,
+            )
+        ]
+    else:
+        traced = torch.jit.trace(model, dummy_input)
+        inputs = [
             ct.TensorType(
                 name="input",
                 shape=dummy_input.shape,
             )
-        ],
+        ]
+
+    mlmodel = ct.convert(
+        traced,
+        inputs=inputs,
         convert_to="mlprogram",
     )
 
@@ -66,4 +104,4 @@ def export_coreml(checkpoint_path, model_name, output_path):
 
 if __name__ == "__main__":
     args = parse_args()
-    export_coreml(args.checkpoint, args.model_name, args.output)
+    export_coreml(args.checkpoint, args.model_name, args.output, args.image_input)

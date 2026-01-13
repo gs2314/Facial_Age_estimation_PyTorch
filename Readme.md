@@ -604,6 +604,18 @@ python export_coreml.py \
 
 This creates `artifacts/age_estimator.mlmodel`. You can deliver this file to iOS devs, who can compile it into `.mlmodelc` in Xcode.
 
+If you want Core ML to handle **image preprocessing** (resize to 128×128, RGB, scale to [0,1], and normalize with mean/std), export with:
+
+```bash
+python export_coreml.py \
+  --checkpoint checkpoints/epoch-16-loss_valid-4.73.pt \
+  --model-name resnet \
+  --output artifacts/age_estimator.mlmodel \
+  --image-input
+```
+
+With `--image-input`, the Core ML model accepts an image input and embeds normalization. Without it, the iOS app must supply a float32 tensor that is already normalized.
+
 > **Note:** Core ML export requires `coremltools` and runs on macOS.
 
 ### 2. Mobile preprocessing requirements (must match training)
