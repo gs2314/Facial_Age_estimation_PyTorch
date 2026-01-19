@@ -591,6 +591,27 @@ python export_onnx.py \
 
 This will generate `artifacts/age_estimator.onnx`.
 
+### 1.2 Export to TFLite for Android
+
+The easiest path is **ONNX → SavedModel → TFLite** using `onnx2tf` and TensorFlow.
+
+1. Export ONNX (see step 1 above).
+2. Install conversion tools:
+
+```bash
+pip install onnx2tf tensorflow
+```
+
+3. Convert ONNX → TFLite:
+
+```bash
+python export_tflite.py \
+  --onnx artifacts/age_estimator.onnx \
+  --output artifacts/age_estimator.tflite
+```
+
+This produces `artifacts/age_estimator.tflite` for Android.
+
 ### 1.1 Export to Core ML (.mlmodel) for iOS
 
 Core ML is the native format for iOS. You can export a `.mlmodel` directly from the PyTorch checkpoint:
