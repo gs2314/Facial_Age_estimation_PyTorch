@@ -1,5 +1,7 @@
 import argparse
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import tensorflow as tf
@@ -22,8 +24,21 @@ def parse_args():
 
 
 def convert_onnx_to_saved_model(onnx_path, saved_model_dir):
-    subprocess.run(
-        [
+    onnx2tf_exe = shutil.which("onnx2tf")
+    if onnx2tf_exe:
+        cmd = [
+            onnx2tf_exe,
+            "-i",
+            str(onnx_path),
+            "-o",
+            str(saved_model_dir),
+            "--output_tensor_type",
+            "float32",
+        ]
+    else:
+        cmd = [
+            sys.executable,
+            "-m",
             "onnx2tf",
             "-i",
             str(onnx_path),
@@ -31,9 +46,8 @@ def convert_onnx_to_saved_model(onnx_path, saved_model_dir):
             str(saved_model_dir),
             "--output_tensor_type",
             "float32",
-        ],
-        check=True,
-    )
+        ]
+    subprocess.run(cmd, check=True)
 
 
 def convert_saved_model_to_tflite(saved_model_dir, output_path):

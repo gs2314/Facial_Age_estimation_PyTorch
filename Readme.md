@@ -612,6 +612,8 @@ python export_tflite.py \
 
 This produces `artifacts/age_estimator.tflite` for Android.
 
+**Windows note:** If you see `WinError 2` about `onnx2tf` not found, the script will fall back to `python -m onnx2tf` automatically. Make sure you installed it in the same environment you are running the export from.
+
 ### 1.1 Export to Core ML (.mlmodel) for iOS
 
 Core ML is the native format for iOS. You can export a `.mlmodel` directly from the PyTorch checkpoint:
