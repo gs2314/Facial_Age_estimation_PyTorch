@@ -599,7 +599,7 @@ The easiest path is **ONNX → SavedModel → TFLite** using `onnx2tf` and Tenso
 2. Install conversion tools:
 
 ```bash
-pip install onnx2tf tensorflow
+pip install onnx2tf tensorflow tf-keras
 ```
 
 3. Convert ONNX → TFLite:
@@ -613,6 +613,8 @@ python export_tflite.py \
 This produces `artifacts/age_estimator.tflite` for Android.
 
 **Windows note:** If you see `WinError 2` about `onnx2tf` not found, the script will fall back to `python -m onnx2tf` automatically. Make sure you installed it in the same environment you are running the export from.
+
+**Python note:** TFLite conversion is expected to run on Python 3.10. If you use Python 3.13, you will likely see dependency errors.
 
 ### 1.1 Export to Core ML (.mlmodel) for iOS
 

@@ -24,6 +24,13 @@ def parse_args():
 
 
 def convert_onnx_to_saved_model(onnx_path, saved_model_dir):
+    try:
+        import tf_keras  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError(
+            "onnx2tf requires the tf-keras package. Install it with "
+            "`pip install tf-keras` in the same environment."
+        ) from exc
     onnx2tf_exe = shutil.which("onnx2tf")
     if onnx2tf_exe:
         cmd = [
